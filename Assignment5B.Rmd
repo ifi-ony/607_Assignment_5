@@ -1,0 +1,93 @@
+---
+title: "607 Assignment 5B Approach"
+author: "Ony"
+date: "2026-02-27"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Assignment 5B Approach
+
+#ELO Chess Player Performance Evaluations
+
+1.  Import the final dataframe from Project 1
+
+2.  Use the Player pre-rating and opponent pre-rating data to calculate their expected score (potential formula: '1/(1+10\^((RB - RA)/400))').
+
+3.  Compare this score to the actual score in a table, sort the players in descending order of discrepancy in expected and actual results, and isolate the top 5 and bottom 5.
+
+## Execution
+
+First, load the R.Data work-space created in project1. (The link below uses he local path as github couldn't provide a raw link for the RData file. Github link for download is: <https://github.com/ifi-ony/607_Assignment_5/blob/ca05c60f8f69414baa62fb165506534cd2830f28/project1workspace.RData>)
+
+```{r}
+load("C:/Users/tesla/Desktop/CUNY DATA SCIENCE DEGREE/607_Data_Aquisition/project_1/project1workspace.RData")
+```
+
+The code chunk below is copied from the Project 1 code, and it creates a list of vectors containing the pre-rating of every opponent faced by that player.
+
+```{r create-opponent-list}
+opps_no_na <- lapply(num_opplist, Filter, f = Negate(is.na))
+opp_scores <- function(x) {
+  num_prerate[unlist(opps_no_na[x])]
+}
+
+no_avg_opp_score <- lapply(player_num, opp_scores)
+
+```
+
+Next we use nested for loops to calculate every player's expected score against each of their opponents from the previous list. The resulting dataframe contains every player, their pre-rating, the ratings for each opponent they faced, their expected scores, their actual scores and the difference between the two.
+
+```{r create-large-dataframe}
+
+
+expected_scores <- vector(mode = "list", length = length(no_avg_opp_score))
+
+overall_expected_score <- list()
+
+for (i in 1:length(no_avg_opp_score)) {
+  for (j in 1:length(no_avg_opp_score[[i]])) {
+    prob <- (1/(1 + 10^((no_avg_opp_score[[i]][j] - full_frame$num_prerate[i])/400) ))
+    
+      expected_scores[[i]][j] = round(prob, digits = 2)
+      
+      overall_expected_score[i] = sum(expected_scores[[i]])
+    
+  }
+}
+
+opp_frame <- full_frame %>%
+  mutate(opp_rating_list = no_avg_opp_score,
+         expected_scores = expected_scores,
+         overall_expected_score = overall_expected_score,
+         overall_actual_score = points,
+         real_minus_expected = overall_actual_score - as.numeric(overall_expected_score))
+ 
+
+
+```
+
+Finally, we sort the dataframe in descending order of score differential and separate it into two tables, one for the top 5 and the other for the bottom 5.
+
+```{r }
+cleaner_frame <- opp_frame %>%
+  select(player_num, player_name, real_minus_expected) %>%
+  arrange(desc(real_minus_expected))
+
+overachievers <- head(cleaner_frame, 5) %>%
+  gt() %>%
+  tab_header("Overachievers List") %>%
+  cols_label(player_name ~ "Player Name", player_num ~ "Player Number", real_minus_expected ~ "Score Delta")
+
+better_luck_next_time <- tail(cleaner_frame, 5) %>%
+  gt() %>%
+  tab_header("Better Luck Next Time") %>%
+  cols_label(player_name ~ "Player Name", player_num ~ "Player Number", real_minus_expected ~ "Score Delta")
+
+overachievers
+better_luck_next_time
+
+```
