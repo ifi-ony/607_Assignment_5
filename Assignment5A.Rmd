@@ -1,0 +1,121 @@
+---
+title: "607 Assignment 5A Approach"
+author: "Ony"
+date: "2026-02-27"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Assignment 5A Approach
+
+1.  Create CSV file mirroring the table given in the assignment image. This can be done manually with excel. A stretch goal is to explore image scraping with the tesseract package.
+
+2.  Import csv, convert to dataframe and use pivot_longer to convert to a tidy frame with an observation in every row and columns (tentatively) for Airline, Destination, Delay Status and Frequency.
+
+3.  Use summarise and ggplot (geom_col) to compare the arrival delay data between destinations and airlines.
+
+## Initiate Libraries
+
+```{r initiate-libraries}
+library(tidyverse)
+library(gt)
+library(dplyr)
+```
+
+## Import CSV
+
+```{r import-csv file}
+wideflights <- read_csv("https://raw.githubusercontent.com/ifi-ony/607_Assignment_5/refs/heads/main/wideFlights.csv")
+
+wideflights_full <- data.frame(wideflights)
+wideflights_full$...1[2] = wideflights_full$...1[1]
+wideflights_full$...1[5] = wideflights_full$...1[4]
+
+```
+
+## Pivot Wide Data to Long Format
+
+The code below creates two objects: 'longflights' - the long format of wideflights that is useful for ggplot processing. 'tidyflights' - the format of the data that is, in my opinion, the most legible. It follows from the example in the Hadley Wickham paper.
+
+```{r}
+
+longflights <- as_tibble(wideflights_full) %>%
+  pivot_longer(cols = !c(...1,...2),
+               names_to = "Destination",
+               values_to = "Frequency",
+               values_drop_na = TRUE) %>%
+  rename("Airline" = ...1, "Status" = ...2)
+  
+
+tidyflights <- as_tibble(wideflights_full) %>%
+  pivot_longer(cols = !c(...1,...2),
+               names_to = "Destination",
+               values_to = "Frequency",
+               values_drop_na = TRUE) %>%
+  pivot_wider(names_from = "...2",
+              values_from = "Frequency") %>%
+  rename("Airline" = ...1)
+```
+
+## Numerical Comparisons
+
+The code below creates two tables for easy numerical comparison.
+
+```{r}
+overall_comp <- tidyflights %>%
+  rename(on_time = "on time") %>%
+  group_by(Airline) %>%
+  summarise(total_flights = sum(on_time + delayed),
+            total_delays = sum(delayed),
+            avg_delay_rate_percent = round(((total_delays/total_flights) * 100) , 2))
+
+
+overall_comp_tab <- overall_comp %>%
+  gt() %>%
+  tab_header("Airline Delay Comparison Across All Destinations") %>%
+  fmt_percent(columns = avg_delay_rate_percent, scale_values = FALSE) %>%
+  cols_label(total_flights ~ "Total Flights", total_delays ~ "Total Delays", avg_delay_rate_percent ~ "Delay Percentage")
+  
+
+
+just_alaska <- filter(tidyflights, Airline == "ALASKA") %>%
+  rename(on_time = "on time")
+
+just_am <- filter(tidyflights, Airline == "AM WEST") %>%
+  rename(on_time_am = "on time", delayed_am = delayed, dest_am = Destination)
+
+tab_prep <- cbind(just_alaska, just_am)
+
+destination_comp <- tab_prep %>%
+  select(Destination, on_time, delayed, on_time_am, delayed_am) %>%
+  #rename(on_time = "on time") %>%
+  mutate(percent_delayed = (delayed/(delayed + on_time)) * 100, percent_delayed_am = (delayed_am/(delayed_am + on_time_am)) * 100) %>%
+  relocate(percent_delayed, .before = on_time_am)
+  
+destination_comp_tab <- destination_comp %>%
+  gt()  %>%
+  tab_header("Airline Delay Comparison Between Destinations") %>%
+  tab_spanner(label = "ALASKA", columns = on_time:percent_delayed) %>%
+  tab_spanner(label = "AM WEST", columns = on_time_am:percent_delayed_am) %>%
+  fmt_percent(columns = c(percent_delayed, percent_delayed_am),  scale_values = FALSE) %>%
+  cols_label(on_time ~ "On Time", delayed ~ "Delayed", percent_delayed ~ "Percent Delayed",
+             on_time_am ~ "On Time", delayed_am ~ "Delayed", percent_delayed_am ~ "Percent Delayed")
+  
+
+
+
+overall_comp_tab
+destination_comp_tab
+
+```
+
+## Graphical Comparisons
+
+```{r}
+ggplot(longflights, aes(fill = Status, x = Airline, y = Frequency )) +
+  geom_bar(position="stack", stat="identity")
+  #geom_text(aes(label = percent(, accuracy = 1)), position = position_stack(vjust = 0.5), color = "white")
+```
